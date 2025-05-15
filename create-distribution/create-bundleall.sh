@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # This script must be run in Git Bash on Windows. Archive creation uses PowerShell.
@@ -287,12 +286,10 @@ create_custom_jre() {
         [ -d "$BUNDLE_NAME/runtime" ] && rm -rf "$BUNDLE_NAME/runtime"
         # Create JRE with all necessary modules for database connections
         jlink --add-modules java.base,java.logging,java.xml,java.management,java.naming,jdk.unsupported,java.sql,java.desktop,java.security.jgss,java.security.sasl,java.net.http,java.compiler,jdk.crypto.ec \
-         --output "$BUNDLE_NAME/runtime" \
+          --output "$BUNDLE_NAME/runtime" \
           --strip-debug --no-man-pages --no-header-files --compress zip-2 || log_warn "jlink failed"
     fi
 }
-
-
 
 create_bundle_readme() {
     echo "Creating bundle README..."
@@ -395,6 +392,32 @@ copy_application_yaml() {
     fi
 }
 
+# --- Cross-platform JAVA_HOME auto-detection ---
+if [ -z "$JAVA_HOME" ]; then
+    if [ "$IS_WINDOWS" = true ]; then
+        # Try to find java.exe using 'where' and convert to Unix path
+        JAVA_EXE_PATH=$(where java 2>/dev/null | head -n 1)
+        if [ -n "$JAVA_EXE_PATH" ]; then
+            # Remove trailing \bin\java.exe and convert to Unix path
+            JAVA_HOME_WIN=$(dirname "$(dirname "$JAVA_EXE_PATH")")
+            JAVA_HOME=$(cygpath -u "$JAVA_HOME_WIN")
+            export JAVA_HOME
+            log_info "Auto-detected JAVA_HOME as $JAVA_HOME (Windows)"
+        fi
+    else
+        JAVA_BIN=$(which java 2>/dev/null)
+        if [ -n "$JAVA_BIN" ]; then
+            JAVA_BIN=$(readlink -f "$JAVA_BIN")
+            JAVA_HOME=$(dirname $(dirname "$JAVA_BIN"))
+            export JAVA_HOME
+            log_info "Auto-detected JAVA_HOME as $JAVA_HOME (Unix)"
+        fi
+    fi
+    if [ -z "$JAVA_HOME" ]; then
+        log_warn "Could not auto-detect JAVA_HOME. Some features may not work."
+    fi
+fi
+
 # Main execution flow
 main() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -414,6 +437,18 @@ main() {
     copy_bundle_templates
     copy_drivers_from_target
     create_custom_jre
+
+    # Create the runtime directory for custom JRE and security files
+    mkdir -p "$BUNDLE_NAME/runtime/lib/security"
+
+    # Copy Java security files into the bundle's runtime
+    if [ -n "$JAVA_HOME" ] && [ -d "$JAVA_HOME/lib/security" ]; then
+        cp -r "$JAVA_HOME/lib/security/"* "$BUNDLE_NAME/runtime/lib/security/"
+        log_info "Copied Java security files from $JAVA_HOME/lib/security to $BUNDLE_NAME/runtime/lib/security"
+    else
+        log_warn "JAVA_HOME is not set or $JAVA_HOME/lib/security does not exist. Skipping security files copy."
+    fi
+
     create_bundle_readme
     create_bundle_archive
     print_final_instructions
