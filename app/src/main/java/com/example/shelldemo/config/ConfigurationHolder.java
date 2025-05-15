@@ -27,6 +27,7 @@ public class ConfigurationHolder {
 
     private ConfigurationHolder() {
         this.runtimeProperties = new ConcurrentHashMap<>();
+        logger.debug("Initializing ConfigurationHolder and loading configuration");
         this.config = loadConfig();
         logger.info("ConfigurationHolder initialized successfully");
     }
@@ -40,16 +41,20 @@ public class ConfigurationHolder {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> loadConfig() {
+        logger.debug("Loading configuration from YAML file: {}", CONFIG_PATH);
         try {
             ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
             InputStream inputStream = null;
             String configPath = System.getProperty("app.config");
             if (configPath != null) {
+                logger.debug("Custom config path specified: {}", configPath);
                 inputStream = openConfigFile(configPath);
             }
             if (inputStream == null) {
+                logger.debug("Trying to load config from class loader resource: {}", CONFIG_PATH);
                 inputStream = getClass().getClassLoader().getResourceAsStream(CONFIG_PATH);
             if (inputStream == null) {
+                logger.debug("Trying to load config from thread context class loader: {}", CONFIG_PATH);
                 inputStream = Thread.currentThread().getContextClassLoader().getResourceAsStream(CONFIG_PATH);
                 }
             }
@@ -58,6 +63,7 @@ public class ConfigurationHolder {
                 logger.error(errorMessage);
                 throw new DatabaseException(errorMessage, ErrorType.CONFIG_NOT_FOUND);
             }
+            logger.debug("Configuration file loaded successfully");
             return yamlMapper.readValue(inputStream, Map.class);
         } catch (IOException e) {
             String errorMessage = "Failed to load configuration";
@@ -67,6 +73,7 @@ public class ConfigurationHolder {
     }
 
     private InputStream openConfigFile(String configPath) {
+        logger.debug("Opening config file at path: {}", configPath);
         try {
             return new java.io.FileInputStream(configPath);
         } catch (java.io.FileNotFoundException e) {
@@ -77,6 +84,7 @@ public class ConfigurationHolder {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> getDatabaseTypes() {
+        logger.debug("Fetching database types from configuration");
         Map<String, Object> databases = (Map<String, Object>) config.get("databases");
         if (databases == null) return Collections.emptyMap();
         
@@ -86,6 +94,7 @@ public class ConfigurationHolder {
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> getDatabaseConfig(String dbType) {
+        logger.debug("Fetching database config for type: {}", dbType);
         if (!isValidDbType(dbType)) {
             String errorMessage = "Invalid database type: " + dbType;
             logger.error(errorMessage);
@@ -98,6 +107,7 @@ public class ConfigurationHolder {
 
     @SuppressWarnings("unchecked")
     public String getJdbcClientTemplate(String dbType, String templateName) {
+        logger.debug("Fetching JDBC client template for dbType: {}, templateName: {}", dbType, templateName);
         Map<String, Object> dbConfig = getDatabaseConfig(dbType);
         Map<String, Object> templates = (Map<String, Object>) dbConfig.get("templates");
         if (templates == null) return null;
@@ -117,11 +127,13 @@ public class ConfigurationHolder {
     }
 
     public String getSqlTemplate(String dbType, String templateName) {
+        logger.debug("Fetching SQL template for dbType: {}, templateName: {}", dbType, templateName);
         return getDatabaseTemplate(dbType, "sql", templateName);
     }
 
     @SuppressWarnings("unchecked")
     public String getDatabaseTemplate(String dbType, String category, String templateName) {
+        logger.debug("Fetching database template for dbType: {}, category: {}, templateName: {}", dbType, category, templateName);
         Map<String, Object> dbConfig = getDatabaseConfig(dbType);
         Map<String, Object> templates = (Map<String, Object>) dbConfig.get("templates");
         if (templates == null) return null;
@@ -134,22 +146,27 @@ public class ConfigurationHolder {
     }
 
     public void setRuntimeProperty(String key, String value) {
+        logger.debug("Setting runtime property: {} = {}", key, value);
         runtimeProperties.put(key, value);
     }
 
     public String getRuntimeProperty(String key) {
+        logger.debug("Getting runtime property for key: {}", key);
         return runtimeProperties.get(key);
     }
 
     public Map<String, String> getRuntimeProperties() {
+        logger.debug("Getting all runtime properties");
         return new ConcurrentHashMap<>(runtimeProperties);
     }
 
     public boolean isValidDbType(String dbType) {
+        logger.debug("Checking if valid dbType: {}", dbType);
         return dbType != null && getDatabaseTypes().containsKey(dbType.toLowerCase());
     }
 
     public int getDefaultPort(String dbType) {
+        logger.debug("Getting default port for dbType: {}", dbType);
         Map<String, Object> dbConfig = getDatabaseConfig(dbType);
         Object port = dbConfig.get("defaultPort");
         return port instanceof Number number ? number.intValue() : 0;
@@ -157,6 +174,7 @@ public class ConfigurationHolder {
 
     @SuppressWarnings("unchecked")
     public Map<String, String> getDatabaseProperties(String dbType) {
+        logger.debug("Getting database properties for dbType: {}", dbType);
         Map<String, Object> dbConfig = getDatabaseConfig(dbType);
         Map<String, Object> properties = (Map<String, Object>) dbConfig.get("properties");
         
@@ -172,6 +190,7 @@ public class ConfigurationHolder {
 
     @SuppressWarnings("unchecked")
     public Map<String, String> getLoggingConfig() {
+        logger.debug("Getting logging configuration");
         Map<String, Object> logging = (Map<String, Object>) config.get("logging");
         if (logging == null) {
             return Collections.emptyMap();
@@ -184,6 +203,7 @@ public class ConfigurationHolder {
 
     @SuppressWarnings("unchecked")
     private void flattenMap(String prefix, Map<String, Object> map, Map<String, String> result) {
+        logger.debug("Flattening map with prefix: {}", prefix);
         for (Map.Entry<String, Object> entry : map.entrySet()) {
             String key = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
             Object value = entry.getValue();
@@ -198,6 +218,7 @@ public class ConfigurationHolder {
 
     @SuppressWarnings("unchecked")
     public Map<String, String> getSpringConfig() {
+        logger.debug("Getting spring configuration");
         Map<String, Object> spring = (Map<String, Object>) config.get("spring");
         if (spring == null) {
             return Collections.emptyMap();
@@ -209,6 +230,7 @@ public class ConfigurationHolder {
     }
 
     public String getApplicationName() {
+        logger.debug("Getting application name from spring config");
         Map<String, String> springConfig = getSpringConfig();
         return springConfig.getOrDefault("application.name", "");
     }
@@ -218,6 +240,7 @@ public class ConfigurationHolder {
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> getVaultConfig() {
+        logger.debug("Getting root-level vault configuration");
         Object vaultObj = config.get("vault");
         if (vaultObj instanceof Map) {
             return new HashMap<>((Map<String, Object>) vaultObj);
