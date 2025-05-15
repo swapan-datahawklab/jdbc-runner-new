@@ -177,36 +177,56 @@ public class UnifiedDatabaseRunner implements Callable<Integer> {
             logger.info("Loading custom JDBC driver from: {}", driverPath);
         }
 
+        // 1. If password is provided, use it
         if (password != null && !password.trim().isEmpty()) {
             logger.debug("Password provided via command line");
             return true;
         }
 
-        // If password is not provided, check if vault is configured
+        // 2. If vaultSecretId is provided on the command line
+        if (vaultSecretId != null && !vaultSecretId.trim().isEmpty()) {
+            if (vaultBaseUrl == null || vaultRoleId == null || vaultAit == null ||
+                vaultBaseUrl.trim().isEmpty() || vaultRoleId.trim().isEmpty() || vaultAit.trim().isEmpty()) {
+                logger.error("If --secret is provided, --vault-url, --vault-role-id, and --vault-ait must also be provided.");
+                return false;
+            }
+            logger.debug("All Vault command-line parameters provided, fetching password from Vault");
+            try {
+                password = fetchPasswordFromVaultWithParams(vaultBaseUrl, vaultRoleId, vaultSecretId, vaultAit);
+            } catch (VaultOperationException e) {
+                logger.error("Failed to fetch password from Vault: {}", e.getMessage());
+                return false;
+            }
+            logger.debug("Exiting setupPassword() with password fetched from Vault (command-line params)");
+            return true;
+        }
+
+        // 3. If vault config is present in application.yaml
         var config = ConfigurationHolder.getInstance();
         var vaultConfig = config.getVaultConfig();
         boolean vaultConfigured = vaultConfig != null
-            && vaultConfig.getOrDefault("baseUrl", "").toString().trim().length() > 0
-            && vaultConfig.getOrDefault("roleId", "").toString().trim().length() > 0
-            && vaultConfig.getOrDefault("secretId", "").toString().trim().length() > 0
-            && vaultConfig.getOrDefault("ait", "").toString().trim().length() > 0;
+            && vaultConfig.getOrDefault("vault-base-url", "").toString().trim().length() > 0
+            && vaultConfig.getOrDefault("vault-role-id", "").toString().trim().length() > 0
+            && vaultConfig.getOrDefault("vault-secret-id", "").toString().trim().length() > 0
+            && vaultConfig.getOrDefault("vault-ait", "").toString().trim().length() > 0;
 
         if (vaultConfigured) {
-            logger.debug("Vault is configured and will be used to fetch password");
+            logger.debug("Vault is configured in application.yaml, fetching password from Vault");
             try {
                 password = fetchPasswordFromVault();
             } catch (VaultOperationException e) {
                 logger.error("Failed to fetch password from Vault: {}", e.getMessage());
                 return false;
             }
-            logger.debug("Exiting setupPassword() with password fetched from Vault");
-            return true;
-        } else {
-            logger.debug("Vault is not configured, prompting user for password");
-            password = promptForPassword();
-            logger.debug("Exiting setupPassword() with password from prompt");
+            logger.debug("Exiting setupPassword() with password fetched from Vault (application.yaml)");
             return true;
         }
+
+        // 4. Prompt for password
+        logger.debug("No password or Vault config found, prompting user for password");
+        password = promptForPassword();
+        logger.debug("Exiting setupPassword() with password from prompt");
+        return true;
     }
 
     private boolean validateOracleConnection() {
@@ -349,6 +369,23 @@ public class UnifiedDatabaseRunner implements Callable<Integer> {
             throw new VaultOperationException("Missing required Vault configuration parameters", null, secretId);
         }
 
+        try {
+            return new VaultSecretFetcherBuilder()
+                .build()
+                .fetchOraclePassword(
+                    baseUrl, roleId, secretId, dbName, ait, username
+                );
+        } catch (VaultException e) {
+            throw new VaultOperationException("Failed to fetch password from Vault: " + e.getMessage(), e, secretId);
+        }
+    }
+
+    // Helper for explicit command-line vault params
+    private String fetchPasswordFromVaultWithParams(String baseUrl, String roleId, String secretId, String ait) throws VaultOperationException {
+        String dbName = database;
+        if (baseUrl == null || dbName == null || roleId == null || secretId == null || ait == null) {
+            throw new VaultOperationException("Missing required Vault configuration parameters", null, secretId);
+        }
         try {
             return new VaultSecretFetcherBuilder()
                 .build()

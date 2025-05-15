@@ -121,10 +121,10 @@ databases:
           "2013": "CONN_FAILED"       # Lost connection
 
 vault:
-  baseUrl: ""
-  roleId: ""
-  secretId: ""
-  ait: ""
+  vault-base-url: ""
+  vault-role-id: ""
+  vault-secret-id: ""
+  vault-ait: ""
 
 # Default validation timeouts
 validation:
