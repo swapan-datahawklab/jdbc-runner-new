@@ -321,7 +321,7 @@ public class UnifiedDatabaseRunner implements Callable<Integer> {
         // If any required parameter is missing, try to get from config
         if (baseUrl == null || roleId == null || secretId == null || ait == null) {
             var config = ConfigurationHolder.getInstance();
-            var vaultConfig = config.getDatabaseConfig("vault");
+            var vaultConfig = config.getVaultConfig();
             if (baseUrl == null) baseUrl = (String) vaultConfig.get("vault-base-url");
             if (roleId == null) roleId = (String) vaultConfig.get("vault-role-id");
             if (secretId == null) vaultSecretId = (String) vaultConfig.get("vault-secret-id");

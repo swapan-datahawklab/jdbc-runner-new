@@ -212,4 +212,16 @@ public class ConfigurationHolder {
         Map<String, String> springConfig = getSpringConfig();
         return springConfig.getOrDefault("application.name", "");
     }
+
+    /**
+     * Returns the root-level 'vault' configuration as a map.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getVaultConfig() {
+        Object vaultObj = config.get("vault");
+        if (vaultObj instanceof Map) {
+            return new HashMap<>((Map<String, Object>) vaultObj);
+        }
+        return Collections.emptyMap();
+    }
 }
