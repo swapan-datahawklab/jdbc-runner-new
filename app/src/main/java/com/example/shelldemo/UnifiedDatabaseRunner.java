@@ -177,20 +177,36 @@ public class UnifiedDatabaseRunner implements Callable<Integer> {
             logger.info("Loading custom JDBC driver from: {}", driverPath);
         }
 
-        if (vaultSecretId != null) {
+        if (password != null && !password.trim().isEmpty()) {
+            logger.debug("Password provided via command line");
+            return true;
+        }
+
+        // If password is not provided, check if vault is configured
+        var config = ConfigurationHolder.getInstance();
+        var vaultConfig = config.getVaultConfig();
+        boolean vaultConfigured = vaultConfig != null
+            && vaultConfig.getOrDefault("baseUrl", "").toString().trim().length() > 0
+            && vaultConfig.getOrDefault("roleId", "").toString().trim().length() > 0
+            && vaultConfig.getOrDefault("secretId", "").toString().trim().length() > 0
+            && vaultConfig.getOrDefault("ait", "").toString().trim().length() > 0;
+
+        if (vaultConfigured) {
+            logger.debug("Vault is configured and will be used to fetch password");
             try {
                 password = fetchPasswordFromVault();
             } catch (VaultOperationException e) {
                 logger.error("Failed to fetch password from Vault: {}", e.getMessage());
                 return false;
             }
-        }
-
-        if ((password == null || password.trim().isEmpty()) && vaultSecretId == null) {
+            logger.debug("Exiting setupPassword() with password fetched from Vault");
+            return true;
+        } else {
+            logger.debug("Vault is not configured, prompting user for password");
             password = promptForPassword();
+            logger.debug("Exiting setupPassword() with password from prompt");
+            return true;
         }
-        logger.debug("Exiting setupPassword() with password: {}", password != null ? "***" : null);
-        return true;
     }
 
     private boolean validateOracleConnection() {
