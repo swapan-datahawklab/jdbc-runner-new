@@ -1,0 +1,57 @@
+@echo off
+setlocal enabledelayedexpansion
+
+echo Script started
+echo After setlocal
+
+REM Get the directory where the script is located
+set SCRIPT_DIR=%~dp0
+set BUNDLE_DIR=%SCRIPT_DIR%
+set APP_JAR=%BUNDLE_DIR%app\dbscriptrunner-1.0-SNAPSHOT.jar
+set LOG_CONFIG=%BUNDLE_DIR%resources\log4j2.xml
+set DRIVERS_DIR=%BUNDLE_DIR%drivers
+
+echo Before usage label
+
+REM If no arguments, show usage and exit
+if "%~1"=="" goto usage
+
+REM If first argument is --help or -h, skip usage and run Java
+if "%~1"=="--help" goto runjava
+if "%~1"=="-h" goto runjava
+
+REM Function to show usage
+:usage
+    echo Usage: %~nx0 [options] ^<script_file^|procedure^>
+    echo Run with --help for all available options.
+    exit /b 1
+
+:runjava
+REM Find a default driver jar if not provided
+set DEFAULT_DRIVER_JAR=
+for %%F in (%DRIVERS_DIR%\*.jar) do (
+    set DEFAULT_DRIVER_JAR=%%F
+    goto :found_driver
+)
+:found_driver
+
+REM Check if --driver-path is present in args
+set DRIVER_PATH_PRESENT=false
+for %%A in (%*) do (
+    if "%%A"=="--driver-path" set DRIVER_PATH_PRESENT=true
+)
+
+set JAVA_OPTS=-Dlog4j.configurationFile=%LOG_CONFIG%
+
+REM If --driver-path is not present and a default exists, add it
+if "%DRIVER_PATH_PRESENT%"=="false" if defined DEFAULT_DRIVER_JAR (
+    echo About to run Java
+    echo Running: %SCRIPT_DIR%runtime\bin\java %JAVA_OPTS% -jar "%APP_JAR%" %* --driver-path "%DEFAULT_DRIVER_JAR%"
+    %SCRIPT_DIR%runtime\bin\java %JAVA_OPTS% -jar "%APP_JAR%" %* --driver-path "%DEFAULT_DRIVER_JAR%"
+) else (
+    echo About to run Java
+    echo Running: %SCRIPT_DIR%runtime\bin\java %JAVA_OPTS% -jar "%APP_JAR%" %*
+    %SCRIPT_DIR%runtime\bin\java %JAVA_OPTS% -jar "%APP_JAR%" %*
+)
+pause
+endlocal
